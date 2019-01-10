@@ -15,6 +15,41 @@ namespace Project_Jaspr
 
     public static class Compiler
     {
+        public static void ExpCompile(AbstractSyntaxTree ast, string outPath)
+        {
+            string asm = "";
+            asm += "extern _ExitProcess@4\nglobal main\nsection .text" + "\n\n";
+
+            asm += ast.root.EvaluateAsm();
+
+            asm += "section .data\n\n";
+            int i = 0;
+            while (i < asm.Length)
+            {
+                if (asm.Substring(i, 1) == "{")
+                {
+                    string data = "";
+                    if (asm.IndexOf("}", i) != -1)
+                    {
+                        data = asm.Substring(i+1, asm.IndexOf("}") - i -1);
+                    }
+                    asm += data + "\n";
+                    asm = asm.Replace("{"+data+"}", "");
+                }
+                i++;
+            }
+
+            File.Create(outPath + ".asm").Close();
+            using (StreamWriter sr = new StreamWriter(outPath + ".asm"))
+            {
+                sr.Write(asm);
+            }
+            Process.Start("nasm.exe", "-fwin32 " + outPath + ".asm").WaitForExit();
+            Process.Start("ld.exe", "-o" + outPath + ".exe " + outPath + ".obj -emain").WaitForExit();
+            //File.Delete(outPath + ".asm");
+            //File.Delete(outPath + ".obj");
+        }
+
         public static void Compile(AbstractSyntaxTree ast, string outPath)
         {
             string asm = "";

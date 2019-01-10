@@ -49,6 +49,7 @@
     <Compile Include="Utils\AbstractSyntaxTree.cs" />
     <Compile Include="Utils\Lexer.cs" />
     <Compile Include="Utils\Nodes\Basics.cs" />
+    <Compile Include="Utils\Parser.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
