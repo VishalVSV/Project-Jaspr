@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Project_Jaspr.Utils.Nodes
 {
@@ -11,6 +8,34 @@ namespace Project_Jaspr.Utils.Nodes
         public class SyntaxError : Exception
         {
 
+        }
+    }
+
+    public static class NodeUtils
+    {
+        public static bool ParentedByFunction(this Node node, out string funcName)
+        {
+            bool parentedByFunc = false;
+            Node func = node;
+            funcName = "";
+            while (func.parent != null)
+            {
+                if (func.parent.GetType() == typeof(Function))
+                {
+                    parentedByFunc = true;
+                    funcName = ((Function)func.parent).Name;
+                    break;
+                }
+                else
+                {
+                    func = func.parent;
+                    funcName = "";
+                }
+            }
+            if (!parentedByFunc)
+                funcName = "";
+
+            return parentedByFunc;
         }
     }
 
@@ -80,6 +105,52 @@ namespace Project_Jaspr.Utils.Nodes
         }
     }
 
+    public abstract class Operation : Expression
+    {
+
+    }
+
+    public abstract class BinaryOp : Operation
+    {
+        public abstract string GetMacro();
+
+        public override string EvaluateAsm()
+        {
+            string asm = "";
+
+            for (int i = 0; i < branches.Count; i++)
+            {
+                Expression Exp = (Expression)branches[i];
+
+                if (Exp.GetType() == typeof(Addition))
+                {
+                    branches.AddRange(Exp.branches);
+                    branches.Remove(Exp);
+                }
+            }
+
+            if (branches.Count == 0)
+                throw new Exception("Syntax Error");
+
+            foreach (Expression exp in branches)
+            {
+                asm += "push " + exp.GetIdentifier() + "\n";
+            }
+            asm += "mov edx," + branches.Count.ToString() + "\n";
+            asm += GetMacro();
+
+            return asm;
+        }
+    }
+
+    public class Addition : BinaryOp
+    {
+        public override string GetMacro()
+        {
+            return "addNumbers";
+        }
+    }
+
     public abstract class Statement : Node
     {
         public string ASM;
@@ -89,7 +160,7 @@ namespace Project_Jaspr.Utils.Nodes
 
     public class Return : Statement
     {
-        public new string ASM = @"mov eax, {0}
+        public new string ASM = @"{0}
 ret";
 
         public Return(Expression exp)
@@ -100,7 +171,9 @@ ret";
         public override string Evaluate()
         {
             if (parent.GetType() == typeof(Function))
+            {
                 return ASM.Replace("{0}", ((Expression)branches[0]).EvaluateAsm());
+            }
             else
                 throw new Exception("Syntax Error");
         }
@@ -113,20 +186,31 @@ ret";
 
     public abstract class Expression : Node
     {
+        public virtual string GetIdentifier()
+        {
+            return "";
+        }
     }
 
     public class Increment : Expression
     {
-        public IntConstant intConst = new IntConstant();
+        string var = "";
 
-        public Increment(int i)
+        public Increment(string arg0)
         {
-            intConst = new IntConstant(i);
+            if (Utils.IsDigitsOnly(arg0))
+            {
+
+            }
+            else
+            {
+                var = arg0;
+            }
         }
 
         public override string EvaluateAsm()
         {
-            return (intConst.GetValue() + 1).ToString();
+            return "add DWORD [" + var + "],1";
         }
     }
 
@@ -156,7 +240,7 @@ ret";
                 nme = ((Function)parent).Name + Name;
             }
 
-            return "{" + nme + " dw " + GetValue() + "}" + "\n" + ext;
+            return "{" + nme + " dd " + GetValue() + "}" + "\n" + ext;
         }
     }
 
@@ -180,18 +264,33 @@ ret";
         }
     }
 
-    public class IntRef : Expression
+    public abstract class VarRef : Expression
     {
-        Int var;
+        string name;
 
-        public IntRef(Int var)
+        public VarRef(string var)
         {
-            this.var = var;
+            this.name = var;
         }
 
         public override string ToString()
         {
-            return "IntRef :"+var.Name;
+            return "IntRef :" + name;
+        }
+
+        public abstract string GetSize();
+
+        public override string GetIdentifier()
+        {
+            string funcName;
+            if (this.ParentedByFunction(out funcName))
+            {
+                return GetSize() + " [" + funcName + name + "]";
+            }
+            else
+            {
+                return GetSize() + " [" + name + "]";
+            }
         }
 
         public override string EvaluateAsm()
@@ -216,12 +315,24 @@ ret";
 
             if (parentedByFunc)
             {
-                return "[" + funcName + var.Name + "]";
+                return "mov eax," + GetSize() + " [" + funcName + name + "]";
             }
             else
             {
-                return "[" + var.Name + "]";
+                return "mov eax," + GetSize() + " [" + name + "]";
             }
+        }
+    }
+
+    public class IntRef : VarRef
+    {
+        public IntRef(string var) : base(var)
+        {
+        }
+
+        public override string GetSize()
+        {
+            return "DWORD";
         }
     }
 
@@ -239,9 +350,14 @@ ret";
             val = value;
         }
 
-        public override string EvaluateAsm()
+        public override string GetIdentifier()
         {
             return val.ToString();
+        }
+
+        public override string EvaluateAsm()
+        {
+            return "mov eax," + val.ToString();
         }
 
         public int GetValue()
@@ -249,6 +365,8 @@ ret";
             return val;
         }
     }
+
+
 
     public class Assign : Statement
     {
@@ -262,15 +380,22 @@ ret";
 
         public override string EvaluateAsm()
         {
+            if (expression == null)
+            {
+                if (branches.Count > 0 && branches[branches.Count - 1] is Expression)
+                    expression = (Expression)branches[branches.Count - 1];
+            }
+
+
             if (expression.GetType() != typeof(FunctionRef))
             {
                 if (parent != null && parent.GetType() == typeof(Function))
                 {
-                    return "mov DWORD " + "[" + ((Function)parent).Name + Variable + "]," + expression.EvaluateAsm();
+                    return expression.EvaluateAsm() + "\n" + "mov " + "[" + ((Function)parent).Name + Variable + "],eax";
                 }
                 else
                 {
-                    return "mov DWORD " + "[" + Variable + "]," + expression.EvaluateAsm();
+                    return expression.EvaluateAsm() + "\n" + "mov " + "[" + Variable + "],eax";
                 }
             }
             else
@@ -278,12 +403,12 @@ ret";
                 if (parent != null && parent.GetType() == typeof(Function))
                 {
                     return expression.EvaluateAsm() + "\n" +
-     "mov DWORD " + "[" + ((Function)parent).Name + Variable + "],eax";
+     "mov " + "[" + ((Function)parent).Name + Variable + "],eax";
                 }
                 else
                 {
                     return expression.EvaluateAsm() + "\n" +
-     "mov DWORD " + "[" + Variable + "],eax";
+     "mov " + "[" + Variable + "],eax";
                 }
             }
         }

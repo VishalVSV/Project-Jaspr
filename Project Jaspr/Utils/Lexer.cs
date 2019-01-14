@@ -19,9 +19,9 @@ namespace Project_Jaspr.Utils
             Keywords.Add("(");
             Keywords.Add(")");
             Keywords.Add("=");
-            Keywords.Add("++");
             Keywords.Add("return");
             Keywords.Add("#");
+            Keywords.Add("+");
         }
 
         public static List<List<Token>> Lex(string path, bool exp)
@@ -81,7 +81,7 @@ namespace Project_Jaspr.Utils
                         {
                             foreach (string key in Keywords)
                             {
-                                if (k + key.Length < line.Length)
+                                if (k + key.Length <= line.Length)
                                     if (line.Substring(k, key.Length) == key || line.Substring(k, 1) == " ")
                                     {
                                         string toAdd = line.Substring(0, k);
@@ -132,135 +132,7 @@ namespace Project_Jaspr.Utils
             return ret;
         }
 
-        public static List<Token> Lex(string path)
-        {
-            List<Token> tokens = new List<Token>();
-
-            bool isIdentifier = true;
-            string prog;
-            using (StreamReader sr = new StreamReader(path))
-            {
-                prog = sr.ReadToEnd();
-            }
-
-            for (int t = 0; t < prog.Length; t++)
-            {
-                if (prog.Substring(t, 1) == "#")
-                {
-                    prog = prog.Replace(prog.Substring(t, prog.IndexOf("\r\n\t", t) - t + "\r\n\t".Length), "");
-                }
-            }
-
-            int i = 0;
-            while (i < prog.Length)
-            {
-                bool keywordIs = false;
-
-                foreach (string keyword in Keywords)
-                {
-                    try
-                    {
-                        string l = prog.Substring(i, 1);
-                        if (prog.Substring(i, 1) == " ")
-                            i++;
-                        l = prog.Substring(i, 1);
-
-                        if (prog.Substring(i, keyword.Length) == keyword)
-                        {
-                            tokens.Add(Token.Construct(keyword));
-                            i += keyword.Length;
-                            keywordIs = true;
-                        }
-
-                    }
-                    catch (ArgumentOutOfRangeException)
-                    {
-                        continue;
-                    }
-                }
-                if (!keywordIs)
-                {
-                    int j = i - 1;
-                    if (j < 0)
-                    {
-                        break;
-                    }
-                    string tok = "";
-                    while (j < prog.Length)
-                    {
-                        bool isKeyword = true;
-                        if (prog.Substring(j, 1) == " ")
-                        {
-                            j++;
-
-                        }
-
-                        foreach (string key in Keywords)
-                        {
-                            try
-                            {
-                                if (prog.Substring(j, key.Length) != key)
-                                {
-                                    isKeyword = false;
-                                }
-                                else
-                                {
-                                    isKeyword = true;
-                                    break;
-                                }
-                            }
-                            catch (ArgumentOutOfRangeException)
-                            {
-                                continue;
-                            }
-                        }
-
-                        if (!isKeyword)
-                        {
-                            if (prog.Substring(j - 1, 1) != " ")
-                            {
-                                tok += prog.Substring(j, 1);
-                                j++;
-                            }
-                            else
-                            {
-                                AddToken(ref tok, ref tokens);
-                                tok = "";
-                                tok += prog.Substring(j, 1);
-                                j++;
-                            }
-                        }
-                        else
-                        {
-                            break;
-                        }
-                    }
-                    AddToken(ref tok, ref tokens);
-
-
-                    i += j - i - 1;
-                }
-
-                i++;
-            }
-            tokens.Add(Token.Construct("ENDLINE"));
-
-            int cnt = tokens.Count;
-            int a = cnt - 1;
-            while (a >= 0)
-            {
-                if (tokens[a].value == "")
-                {
-                    tokens.RemoveAt(a);
-                }
-
-                a--;
-            }
-
-
-            return tokens;
-        }
-
+        
         static void AddToken(ref string tok, ref List<Token> tokens)
         {
             if (tok.Contains("\r\n\t"))

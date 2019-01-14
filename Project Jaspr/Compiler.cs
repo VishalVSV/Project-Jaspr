@@ -18,7 +18,11 @@ namespace Project_Jaspr
         public static void ExpCompile(AbstractSyntaxTree ast, string outPath)
         {
             string asm = "";
-            asm += "extern _ExitProcess@4\nglobal main\nsection .text" + "\n\n";
+            using (StreamReader sr = new StreamReader("BasicAsm.asm"))
+            {
+                asm = sr.ReadToEnd();
+            }
+            //asm += "extern _ExitProcess@4\nglobal main\nsection .text" + "\n\n";
 
             asm += ast.root.EvaluateAsm();
 
@@ -31,10 +35,10 @@ namespace Project_Jaspr
                     string data = "";
                     if (asm.IndexOf("}", i) != -1)
                     {
-                        data = asm.Substring(i+1, asm.IndexOf("}") - i -1);
+                        data = asm.Substring(i+1, asm.IndexOf("}",i) - i -1);
                     }
+                    asm = asm.Remove(i, asm.IndexOf("}", i) - i + 1);
                     asm += data + "\n";
-                    asm = asm.Replace("{"+data+"}", "");
                 }
                 i++;
             }
@@ -44,8 +48,12 @@ namespace Project_Jaspr
             {
                 sr.Write(asm);
             }
-            Process.Start("nasm.exe", "-fwin32 " + outPath + ".asm").WaitForExit();
-            Process.Start("ld.exe", "-o" + outPath + ".exe " + outPath + ".obj -emain").WaitForExit();
+            ProcessStartInfo si = new ProcessStartInfo("nasm.exe", "-fwin32 " + outPath + ".asm");
+            si.CreateNoWindow = true;
+            Process.Start(si).WaitForExit();
+            si = new ProcessStartInfo("ld.exe", "-o" + outPath + ".exe " + outPath + ".obj -emain");
+            si.CreateNoWindow = true;
+            Process.Start(si).WaitForExit();
             //File.Delete(outPath + ".asm");
             //File.Delete(outPath + ".obj");
         }
